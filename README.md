@@ -4,7 +4,7 @@
 ![Asakatsu_slack_architecure](./img/Asakatsu_slack_architecture.jpg)
 
 ①指定した時刻にSlackBotが朝の訪れを伝える。
-![Asakatsu_wake_up](./img/Asakatsu_wake_up.png)
+<img src="./img/Asakatsu_wake_up.png", width="40">
 ②グループのメンバーは30分以内に起きて返信をする。
 
 ③ちゃんと朝起きて返信できたメンバーを数えて投稿される。
