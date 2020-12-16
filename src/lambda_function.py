@@ -23,23 +23,18 @@ def lambda_handler(event, context):
     table = dynamoDB.Table(table_name)
     
     if 'event_name' in event: # トリガーがCloudWatchのとき
-        
         if event["event_name"] == "send":
             day_check_all_to_false(table)
             post_message_to_channel('朝だよ！僕に返信してね!！！')
             return return_200_message('aggregate start')
         elif event["event_name"] == "aggregate":
-            ### week_checkを+1したのちday_checkを全員falseにする
-            results = day_result(table)
-            post_message_to_channel('-----------------------------'+'\n')
-            post_message_to_channel('⇓ 今日起きれた人 ⇓\n' + results)
+            # week_checkを+1したのちday_checkを全員falseにする
+            day_result_post(table)
             week_check_plus_1(table)
             day_check_all_to_false(table)
-            post_message_to_channel('-----------------------------'+'\n')
             return return_200_message('day aggregate finish')
         elif event["event_name"] == "weekly_check":
-            results = week_result(table)
-            post_message_to_channel('集計結果です。\n'+results)
+            week_result_post(table)
             week_check_all_to_0(table)
             return return_200_message('week aggregate finish')
     
@@ -167,7 +162,7 @@ def week_check_plus_1(table):
                 ":sum_check":sum_check_update
             })
         
-def day_result(table):
+def day_result_post(table):
     response = table.scan()
     items = response['Items']
     results = ''
@@ -175,9 +170,14 @@ def day_result(table):
         name = item['name']
         if item['day_check']:
             results += name + '\n'
-    return results
+    message = \
+    '-----------------------------' + '\n' + \
+    '⇓ 今日起きれた人 ⇓(test)\n' + \
+    results + \
+    '-----------------------------'+'\n'
+    post_message_to_channel(message)
 
-def week_result(table):
+def week_result_post(table):
     response = table.scan()
     items = response['Items']
     results = ''
@@ -185,4 +185,9 @@ def week_result(table):
         name = item['name']
         week_check = item['week_check']
         results += name + ' => ' + str(week_check) + '\n'
-    return results
+    message = \
+    '-----------------------------' + '\n' + \
+    '⇓ 今週の集計 ⇓(test)\n' + \
+    results + \
+    '-----------------------------'+'\n'
+    post_message_to_channel(message)
