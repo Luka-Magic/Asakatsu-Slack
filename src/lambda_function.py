@@ -65,6 +65,7 @@ def lambda_handler(event, context):
         
         ## 検証終わり##
         
+        # 途中経過と打てば途中経過が送信される
         if "途中経過" == body['event']['text']:
             now_result_post(table)
             return return_200_message('now result')
