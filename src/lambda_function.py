@@ -6,9 +6,7 @@ import boto3
 import logging
 import datetime
 import urllib.request
-
-now = datetime.datetime.now()
-now = '-'.join([str((now.hour+9)%24),str(now.minute),str(now.second)])
+import re
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -23,10 +21,12 @@ def lambda_handler(event, context):
     table = dynamoDB.Table(table_name)
     
     if 'event_name' in event: # トリガーがCloudWatchのとき
-        if event["event_name"] == "send":
+        if event["event_name"] == "start":
             day_check_all_to_false(table)
-            post_message_to_channel('朝だよ！僕に返信してね!！！')
             return return_200_message('aggregate start')
+        elif event["event_name"] == "send":
+            post_message_to_channel('朝だよ！僕に返信してね!！！')
+            return return_200_message('sent morning message')
         elif event["event_name"] == "aggregate":
             # week_checkを+1したのちday_checkを全員falseにする
             day_result_post(table)
@@ -37,11 +37,11 @@ def lambda_handler(event, context):
             week_result_post(table)
             week_check_all_to_0(table)
             return return_200_message('week aggregate finish')
-    
-    elif 'body' in event.keys():
-        body = json.loads(event['body'])
     else:
-        return_200_message('invalid event')
+        try:
+            body = json.loads(event['body'])
+        except:
+            return return_200_message('invalid event')
     if 'authorizations' in body: # トリガーが返信のとき
         
         ## 検証スタート##
@@ -65,8 +65,9 @@ def lambda_handler(event, context):
         
         ## 検証終わり##
         
-        # 投稿時に何か返信
-        # post_message_to_channel('something')
+        if "途中経過" == body['event']['text']:
+            now_result_post(table)
+            return return_200_message('now result')
         
         response = table.scan()
         items = response['Items']
@@ -97,7 +98,7 @@ def lambda_handler(event, context):
                     ":day_check":True
                 })
         
-        return return_200_message(f'{user_name}'+'オッケー')
+        return return_200_message(f'{user_name}'+' ok!')
     else:
         return return_200_message('not OK')
 
@@ -109,10 +110,12 @@ def post_message_to_channel(message):
     requests.post(url, data=msg)
 
 def return_200_message(message):
-    return {
+    return_message =  {
         'statusCode': 200,
         'body': json.dumps(message)
     }
+    logging.info(json.dumps(return_message))
+    return return_message
 
 def day_check_all_to_false(table):
     ### 全員のday_checkをfalseにリセットする
@@ -172,7 +175,7 @@ def day_result_post(table):
             results += name + '\n'
     message = \
     '-----------------------------' + '\n' + \
-    '⇓ 今日起きれた人 ⇓(test)\n' + \
+    '⇓ 今日起きれた人 ⇓\n' + \
     results + \
     '-----------------------------'+'\n'
     post_message_to_channel(message)
@@ -181,13 +184,28 @@ def week_result_post(table):
     response = table.scan()
     items = response['Items']
     results = ''
-    for item in items:
-        name = item['name']
-        week_check = item['week_check']
+    week_check_list = [(item['name'], item['week_check']) for item in items]
+    week_check_list = sorted(week_check_list, key=lambda x:x[1], reverse=True)
+    for name, week_check in week_check_list:
         results += name + ' => ' + str(week_check) + '\n'
     message = \
     '-----------------------------' + '\n' + \
-    '⇓ 今週の集計 ⇓(test)\n' + \
+    '⇓ 今週の集計 ⇓\n' + \
+    results + \
+    '-----------------------------'+'\n'
+    post_message_to_channel(message)
+
+def now_result_post(table):
+    response = table.scan()
+    items = response['Items']
+    results = ''
+    week_check_list = [(item['name'], item['week_check']) for item in items]
+    week_check_list = sorted(week_check_list, key=lambda x:x[1], reverse=True)
+    for name, week_check in week_check_list:
+        results += name + ' => ' + str(week_check) + '\n'
+    message = \
+    '-----------------------------' + '\n' + \
+    '⇓ 途中経過です。 ⇓\n' + \
     results + \
     '-----------------------------'+'\n'
     post_message_to_channel(message)
