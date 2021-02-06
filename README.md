@@ -23,6 +23,7 @@
 
 ④週末にはメンバーがそれぞれ一週間で何日起きれたか投稿される。
 
+<img src="https://github.com/Luka-Magic/Asakatsu-Slack/blob/main/img/Asakatsu_week_checks.png" width="400">
 
 <br>
 
