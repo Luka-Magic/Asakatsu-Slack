@@ -15,13 +15,13 @@
 
 <img src="https://github.com/Luka-Magic/Asakatsu-Slack/blob/main/img/Asakatsu_wake_up.png" width="500">
 
-②グループのメンバーは30分以内に起きて返信をする。
+②グループのメンバーは30分以内に起きて返信。
 
-③ちゃんと朝起きて返信できたメンバーを数えて投稿される。
+③起きれたメンバーを集計。
 
 <img src="https://github.com/Luka-Magic/Asakatsu-Slack/blob/main/img/Asakatsu_day_check.png" width="500">
 
-④週末にはメンバーがそれぞれ一週間で何日起きれたか投稿される。
+④週末にはメンバーが一週間で何日起きれたか投稿される。
 
 <img src="https://github.com/Luka-Magic/Asakatsu-Slack/blob/main/img/Asakatsu_week_checks.png" width="250">
 
