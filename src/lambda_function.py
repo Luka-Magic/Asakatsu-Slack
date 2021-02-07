@@ -12,68 +12,76 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    # eventが発生したらDBに接続
     
     logging.info(json.dumps(event))
-    
+
+    ## eventが発生したらDBに接続
     dynamoDB = boto3.resource("dynamodb")
-    table_name = 'Asakatsu_Slack_DB'
-    table = dynamoDB.Table(table_name)
-    
-    if 'event_name' in event: # トリガーがCloudWatchのとき
-        if event["event_name"] == "start":
-            day_check_all_to_false(table)
-            return return_200_message('aggregate start')
-        elif event["event_name"] == "send":
-            post_message_to_channel('朝だよ！僕に返信してね!！！')
-            return return_200_message('sent morning message')
+    table = dynamoDB.Table(os.environ['DB'])
+
+    ## トリガーがCloudWatchのとき
+    if 'event_name' in event:
+        # メッセージの受付を開始する
+        if event["event_name"] == "accept":
+            reset_day_checks(table)
+            return ok_message('started accepting message')
+        # 朝の訪れを伝える
+        elif event["event_name"] == "good_morning":
+            post_message_to_channel('朝だよ！僕に返信してね！！')
+            return ok_message('sent morning message')
+        # メッセージの受付を終了する
         elif event["event_name"] == "aggregate":
-            # week_checkを+1したのちday_checkを全員falseにする
-            day_result_post(table)
-            week_check_plus_1(table)
-            day_check_all_to_false(table)
-            return return_200_message('day aggregate finish')
-        elif event["event_name"] == "weekly_check":
-            week_result_post(table)
-            week_check_all_to_0(table)
-            return return_200_message('week aggregate finish')
+            day_results_post(table)
+            week_checks_plus1(table)
+            reset_day_checks(table)
+            return ok_message('stopped accepting message')
+        # 一週間の集計結果を投稿する
+        elif event["event_name"] == "weekly_result":
+            week_results_post(table)
+            reset_week_checks(table)
+            return ok_message('post week result')
     else:
         try:
             body = json.loads(event['body'])
         except:
-            return return_200_message('invalid event')
-    if 'authorizations' in body: # トリガーが返信のとき
+            return ok_message('invalid event')
+    
+    ## トリガーが投稿のとき
+    if 'authorizations' in body:
         
         ## 検証スタート##
         
         #tokenの確認
         if body['token'] != os.environ['SLACK_TOKEN']:
-            return return_200_message('invalid token')
+            return ok_message('invalid token')
         
         # botなら終了
         if 'user' not in body['event'].keys():
-            return return_200_message('not user')
+            return ok_message('not user')
 
         # 投稿者のidを取得
         user_id = body['event']['user']
         
-        # 投稿者が登録されてなければ終了
+        
         user_name = os.environ.get(user_id)
-
+        
+        # 投稿者が登録されてなければ終了
         if not user_name:
-            return return_200_message('not correct user')
+            return ok_message('not exist user')
         
         ## 検証終わり##
         
-        # 途中経過と打てば途中経過が送信される
+        # 「途中経過」と投稿すると途中経過が見れる
         if "途中経過" == body['event']['text']:
-            now_result_post(table)
-            return return_200_message('now result')
+            interim_results_post(table)
+            return ok_message('interim results')
         
         response = table.scan()
         items = response['Items']
         name_list_in_db = [item['name'] for item in items]
-        if user_name not in name_list_in_db: # 返信者がもしDBにいなかったら追加
+        
+        # 投稿者がもしDBにいなかったらday_checkをTrueにしてDBに追加
+        if user_name not in name_list_in_db:
             table.put_item(
                 Item = {
                     "day_check":True,
@@ -82,16 +90,17 @@ def lambda_handler(event, context):
                     "sum_check":int(0)
                     }
                 )
-        else: # もしDBにいたらday_checkをTrueに
+        # すでにDBにいたらday_checkをTrueに
+        else:
             primary_key = {
                 "name":user_name
             }
             item = table.get_item(
                 Key=primary_key
             )
-            # もしday_checkがすでにTrueだったら終了
+            # すでにday_checkがTrueだったら終了
             if item["Item"]['day_check'] == True:
-                return return_200_message('already day_check true')
+                return ok_message('day_check already true')
             table.update_item(
                 Key = primary_key,
                 UpdateExpression="set day_check = :day_check",
@@ -99,18 +108,19 @@ def lambda_handler(event, context):
                     ":day_check":True
                 })
         
-        return return_200_message(f'{user_name}'+' ok!')
+        return ok_message(f'{user_name}'+' ok!')
     else:
-        return return_200_message('not OK')
+        return ok_message('not ok')
 
 def post_message_to_channel(message):
+    ## メッセージをslackに投稿
     url = os.environ['SLACK_INCOMING_WEBHOOK']
     msg = json.dumps({
         "text": message,
     })
     requests.post(url, data=msg)
 
-def return_200_message(message):
+def ok_message(message):
     return_message =  {
         'statusCode': 200,
         'body': json.dumps(message)
@@ -118,8 +128,8 @@ def return_200_message(message):
     logging.info(json.dumps(return_message))
     return return_message
 
-def day_check_all_to_false(table):
-    ### 全員のday_checkをfalseにリセットする
+def reset_day_checks(table):
+    ### 全員のday_checkをfalseにする
     response = table.scan()
     items = response['Items']
     for item in items:
@@ -133,8 +143,8 @@ def day_check_all_to_false(table):
                 ":day_check":False
             })
 
-def week_check_all_to_0(table):
-    ### 全員のweek_checkを0にリセットする
+def reset_week_checks(table):
+    ## 全員のweek_checkを0にする
     response = table.scan()
     items = response['Items']
     for item in items:
@@ -148,7 +158,8 @@ def week_check_all_to_0(table):
                 ":week_check":int(0)
             })
 
-def week_check_plus_1(table):
+def week_checks_plus1(table):
+    ## day_checkがTrueであるメンバーのweek_checkに1を加える
     response = table.scan()
     items = response['Items']
     for item in items:
@@ -166,7 +177,8 @@ def week_check_plus_1(table):
                 ":sum_check":sum_check_update
             })
         
-def day_result_post(table):
+def day_results_post(table):
+    ## 起きれた人を投稿
     response = table.scan()
     items = response['Items']
     results = ''
@@ -181,7 +193,8 @@ def day_result_post(table):
     '-----------------------------'+'\n'
     post_message_to_channel(message)
 
-def week_result_post(table):
+def week_results_post(table):
+    ## 一週間のうち何日起きれたかを投稿
     response = table.scan()
     items = response['Items']
     results = ''
@@ -196,7 +209,8 @@ def week_result_post(table):
     '-----------------------------'+'\n'
     post_message_to_channel(message)
 
-def now_result_post(table):
+def interim_results_post(table):
+    ## 途中経過を投稿
     response = table.scan()
     items = response['Items']
     results = ''
